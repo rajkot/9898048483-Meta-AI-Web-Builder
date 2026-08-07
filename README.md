@@ -98,3 +98,29 @@ A multi-stage `Dockerfile` is included for deployment to Cloud Run, Railway, or 
 docker build -t meta-ai-builder .
 docker run -p 3000:3000 meta-ai-builder
 ```
+
+---
+
+## 📦 Pushing to Git Repository (GitHub / GitLab)
+
+All repository configuration files (`.gitignore`, `.gitattributes`, `LICENSE`, `package.json`, `.github/workflows/ci.yml`, `.github/workflows/build-executables.yml`, `build-all.sh`, `build-all.bat`, and `BUILD_GUIDE.md`) are pre-configured.
+
+To push to your Git remote:
+
+```bash
+# 1. Initialize git repository (if not already done)
+git init
+
+# 2. Stage all files
+git add .
+
+# 3. Create initial commit
+git commit -m "feat: initial commit of Meta-AI Web Builder with Multi-OS Target Exporter"
+
+# 4. Set main branch & add remote origin
+git branch -M main
+git remote add origin https://github.com/your-username/meta-ai-web-builder.git
+
+# 5. Push to remote repository
+git push -u origin main
+```
