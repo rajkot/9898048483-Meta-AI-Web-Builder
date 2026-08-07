@@ -26,126 +26,74 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf build-essential curl wget file libssl-dev
-
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Install Node Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Web Application
         run: npm run build
 
-      - name: Auto-Scaffold Missing Tauri Assets
+      - name: Auto-Generate Electron Wrapper Configuration
         shell: bash
         run: |
-          if [ ! -f "src-tauri/Cargo.toml" ] || [ ! -f "src-tauri/src/main.rs" ] || [ ! -f "src-tauri/tauri.conf.json" ]; then
-            echo "src-tauri structure incomplete or missing, auto-scaffolding Tauri assets..."
-            mkdir -p src-tauri/src src-tauri/icons
+          if [ ! -f "electron-main.js" ]; then
+            cat << 'EOF' > electron-main.js
+          const { app, BrowserWindow } = require('electron');
+          const path = require('path');
 
-            cat << 'EOF' > src-tauri/Cargo.toml
-[package]
-name = "meta-ai-builder"
-version = "1.0.0"
-description = "Meta-AI Web Builder Application"
-authors = ["Meta-AI Builder"]
-edition = "2021"
-
-[build-dependencies]
-tauri-build = { version = "1.5", features = [] }
-
-[dependencies]
-tauri = { version = "1.6", features = ["shell-open"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-[features]
-default = ["custom-protocol"]
-custom-protocol = ["tauri/custom-protocol"]
-EOF
-
-            cat << 'EOF' > src-tauri/src/main.rs
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-fn main() {
-  tauri::Builder::default()
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
-}
-EOF
-
-            cat << 'EOF' > src-tauri/tauri.conf.json
-{
-  "build": {
-    "beforeBuildCommand": "",
-    "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
-  },
-  "package": {
-    "productName": "Meta-AI-Builder",
-    "version": "1.0.0"
-  },
-  "tauri": {
-    "allowlist": { "all": true },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.metaai.builder",
-      "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icon.icns", "icon.ico"]
-    },
-    "security": { "csp": null },
-    "windows": [{ "title": "Meta-AI Web Builder", "width": 1280, "height": 800 }]
-  }
-}
-EOF
-
-            node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const dir = 'src-tauri/icons';
-            fs.mkdirSync(dir, { recursive: true });
-            const pngBuf = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-            ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns'].forEach(f => {
-              fs.writeFileSync(path.join(dir, f), pngBuf);
+          function createWindow() {
+            const win = new BrowserWindow({
+              width: 1280,
+              height: 800,
+              webPreferences: { nodeIntegration: true, contextIsolation: false }
             });
-            "
+            win.loadFile(path.join(__dirname, 'dist/index.html'));
+          }
+
+          app.whenReady().then(createWindow);
+          app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+          EOF
           fi
 
-      - name: Build Desktop Binaries
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: v__VERSION__
-          releaseName: 'Meta-AI Builder v__VERSION__'
-          releaseBody: 'Automated desktop build executable'
-          releaseDraft: true
-          prerelease: false
-          includeTauri: true
-          args: ${{ matrix.os == 'ubuntu-latest' && '--target x86_64-unknown-linux-gnu' || '' }}
+          cat << 'EOF' > electron-builder.json
+          {
+            "appId": "com.metaai.webbuilder",
+            "productName": "Meta-AI-Builder",
+            "directories": { "output": "release-builds" },
+            "files": ["dist/**/*", "electron-main.js", "package.json"],
+            "win": { "target": ["nsis", "portable"] },
+            "mac": { "target": ["dmg", "zip"] },
+            "linux": { "target": ["AppImage", "deb"] }
+          }
+          EOF
 
-      - name: Upload Desktop Artifacts
+      - name: Install Electron Builder CLI
+        run: npm install --no-save electron@30.0.0 electron-builder@24.13.3
+
+      - name: Compile Desktop Executables
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" == "windows" ]; then
+            npx electron-builder --win --config electron-builder.json
+          elif [ "${{ matrix.platform }}" == "macos" ]; then
+            npx electron-builder --mac --config electron-builder.json
+          else
+            npx electron-builder --linux --config electron-builder.json
+          fi
+
+      - name: Upload Desktop Binaries
         uses: actions/upload-artifact@v4
         with:
           name: meta-ai-builder-${{ matrix.platform }}-binary
           if-no-files-found: warn
-          path: |
-            src-tauri/target/release/bundle/**/*
-            dist/
+          path: release-builds/*
 
   build-android:
-    name: Build Android APK (.apk & .aab)
+    name: Build Android APK (.apk)
     runs-on: ubuntu-latest
 
     steps:
@@ -153,38 +101,40 @@ EOF
         uses: actions/checkout@v4
 
       - name: Setup Java JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install Node Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
-      - name: Build Web Assets
+      - name: Build Web Application
         run: npm run build
 
-      - name: Capacitor Sync Android
-        run: npx cap sync android || echo "Capacitor sync completed"
+      - name: Auto-Scaffold Android Project if Missing
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap init MetaAIBuilder com.metaai.builder --web-dir dist
+            npm install @capacitor/core @capacitor/cli @capacitor/android
+            npx cap add android
+          fi
+          npx cap sync android || true
 
-      - name: Build Android Debug APK
+      - name: Compile Android Debug APK
         run: |
           if [ -d "android" ]; then
             cd android && ./gradlew assembleDebug
-          else
-            echo "Skipping gradle; android folder absent."
           fi
 
-      - name: Upload Android APK Artifact
+      - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: meta-ai-builder-android-apk
           if-no-files-found: warn
-          path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            dist/
+          path: android/app/build/outputs/apk/debug/app-debug.apk
