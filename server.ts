@@ -26,6 +26,33 @@ const getGeminiClient = () => {
   });
 };
 
+// Retry helper for Gemini API calls to handle temporary 503 high demand spikes
+async function callGeminiWithRetry(ai: GoogleGenAI, params: any): Promise<string> {
+  const modelsToTry = ['gemini-3.6-flash', 'gemini-3.1-pro'];
+  let lastError: any = null;
+
+  for (const modelName of modelsToTry) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          ...params,
+          model: modelName,
+        });
+        if (response && response.text) {
+          return response.text;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Gemini API attempt ${attempt} on ${modelName} failed:`, err?.message || err);
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+      }
+    }
+  }
+  throw lastError || new Error('All Gemini API models unavailable');
+}
+
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -51,8 +78,7 @@ Respond strictly with valid JSON.`;
 
 Generate 3 strategic build options for this application with high architectural detail.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+    const jsonText = await callGeminiWithRetry(ai, {
       contents: prompt,
       config: {
         systemInstruction,
@@ -123,8 +149,7 @@ Generate 3 strategic build options for this application with high architectural 
       },
     });
 
-    const jsonText = response.text || '{}';
-    const parsed = JSON.parse(jsonText);
+    const parsed = JSON.parse(jsonText || '{}');
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/ai/strategy:', error);
@@ -205,8 +230,7 @@ Selected Strategy: ${JSON.stringify(selectedStrategy)}
 
 Generate 4 targeted domain collector questions.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+    const jsonText = await callGeminiWithRetry(ai, {
       contents: prompt,
       config: {
         systemInstruction,
@@ -238,8 +262,7 @@ Generate 4 targeted domain collector questions.`;
       },
     });
 
-    const jsonText = response.text || '{}';
-    res.json(JSON.parse(jsonText));
+    res.json(JSON.parse(jsonText || '{}'));
   } catch (error: any) {
     console.error('Error in /api/ai/domain-questions:', error);
     res.json({
@@ -303,8 +326,8 @@ Generate 4 targeted domain collector questions.`;
 
 // Stage 3: Master Spec Architect (Claude / ChatGPT Persona)
 app.post('/api/ai/master-spec', async (req, res) => {
+  const { userPrompt = '', selectedStrategy = {}, domainAnswers = {} } = req.body || {};
   try {
-    const { userPrompt, selectedStrategy, domainAnswers } = req.body;
     const ai = getGeminiClient();
 
     const systemInstruction = `You are Master Spec Architect (Claude-3.7 / GPT-4o Persona).
@@ -325,8 +348,7 @@ Domain Collector Answers: ${JSON.stringify(domainAnswers)}
 
 Generate the complete MASTER_PROMPT specification.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+    const jsonText = await callGeminiWithRetry(ai, {
       contents: prompt,
       config: {
         systemInstruction,
@@ -334,15 +356,14 @@ Generate the complete MASTER_PROMPT specification.`;
       },
     });
 
-    const jsonText = response.text || '{}';
-    res.json(JSON.parse(jsonText));
+    res.json(JSON.parse(jsonText || '{}'));
   } catch (error: any) {
     console.error('Error in /api/ai/master-spec:', error);
     res.json({
       title: 'Master Specification: Meta-AI Web Builder Platform',
       version: '1.0.0-PROD',
       overview: 'Comprehensive technical blueprint and execution contract for building a multi-stage interactive AI web builder platform with Google Drive sync.',
-      targetAudience: domainAnswers.targetPersona || 'Modern SaaS Builders and Engineers',
+      targetAudience: (domainAnswers && domainAnswers.targetPersona) || 'Modern SaaS Builders and Engineers',
       techStackSummary: 'React 18 + TypeScript + Tailwind CSS + Express Node.js Backend + Google GenAI + Google Drive API',
       masterPromptMarkdown: `# MASTER_PROMPT.md - Architecture Blueprint
 
@@ -412,8 +433,8 @@ This application is an interactive Meta-AI Web Builder platform that executes a 
 
 // Stage 4: Code File Generator Execution Engine
 app.post('/api/ai/generate-code', async (req, res) => {
+  const { masterSpec = null, selectedStrategy = null, userPrompt = '' } = req.body || {};
   try {
-    const { masterSpec, selectedStrategy, userPrompt } = req.body;
     const ai = getGeminiClient();
 
     const systemInstruction = `You are a Senior Principal Full-Stack Code Generation Engine.
@@ -443,8 +464,7 @@ Master Prompt Markdown: ${masterSpec?.masterPromptMarkdown || ''}
 
 Generate the complete JSON file tree mapping paths to full source code.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+    const jsonText = await callGeminiWithRetry(ai, {
       contents: prompt,
       config: {
         systemInstruction,
@@ -452,8 +472,7 @@ Generate the complete JSON file tree mapping paths to full source code.`;
       },
     });
 
-    const jsonText = response.text || '{}';
-    const parsed = JSON.parse(jsonText);
+    const parsed = JSON.parse(jsonText || '{}');
     const files = parsed.files || {};
     const fileList = Object.keys(files);
 

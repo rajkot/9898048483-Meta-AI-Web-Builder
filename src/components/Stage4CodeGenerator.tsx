@@ -82,7 +82,7 @@ export const Stage4CodeGenerator: React.FC<Stage4CodeGeneratorProps> = ({
       const filesToZip = Object.keys(fileContents).length > 0 ? fileContents : project.files;
 
       Object.entries(filesToZip).forEach(([path, content]) => {
-        zip.file(path, content);
+        zip.file(path, String(content ?? ''));
       });
 
       const blob = await zip.generateAsync({ type: 'blob' });

@@ -52,8 +52,8 @@ export default function App() {
         body: JSON.stringify({ userPrompt: promptText }),
       });
 
-      if (!res.ok) throw new Error('Failed to generate strategic options');
-      const data: StrategyBreakdown = await res.json();
+      const data: StrategyBreakdown | null = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error('Failed to generate strategic options');
       setStrategyBreakdown(data);
 
       if (data.options && data.options.length > 0) {
@@ -83,8 +83,8 @@ export default function App() {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to fetch domain questions');
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error('Failed to fetch domain questions');
       setDomainQuestions(data.questions || []);
     } catch (err: any) {
       console.error('Error generating domain questions:', err);
@@ -111,8 +111,8 @@ export default function App() {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to synthesize Master Spec');
-      const data: MasterSpec = await res.json();
+      const data: MasterSpec | null = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error('Failed to synthesize Master Spec');
       setMasterSpec(data);
       setCompletedStages(prev => ({ ...prev, spec: true }));
     } catch (err: any) {
@@ -140,8 +140,8 @@ export default function App() {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to generate project code');
-      const data: GeneratedProject = await res.json();
+      const data: GeneratedProject | null = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error('Failed to generate project code');
       setProject(data);
       setCompletedStages(prev => ({ ...prev, code: true }));
     } catch (err: any) {
@@ -169,8 +169,8 @@ export default function App() {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to sync with Google Drive');
-      const data: DriveSyncResult = await res.json();
+      const data: DriveSyncResult | null = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error('Failed to sync with Google Drive');
       setSyncResult(data);
       setCompletedStages(prev => ({ ...prev, drive: true }));
     } catch (err: any) {
