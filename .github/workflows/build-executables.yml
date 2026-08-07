@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Install Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -43,12 +43,40 @@ jobs:
       - name: Install Node Dependencies
         run: npm install
 
+      - name: Build Web Application
+        run: npm run build
+
       - name: Auto-Initialize Tauri Configs if Missing
         shell: bash
         run: |
-          if [ ! -d "src-tauri" ]; then
-            echo "src-tauri directory missing, initializing default Tauri app..."
-            npx @tauri-apps/cli init --app-name "meta-ai-builder" --window-title "Meta-AI Builder" --dist-dir "../dist" --dev-url "http://localhost:1420" --ci
+          if [ ! -f "src-tauri/tauri.conf.json" ]; then
+            echo "src-tauri/tauri.conf.json missing, initializing default configuration..."
+            mkdir -p src-tauri
+            cat << 'EOF' > src-tauri/tauri.conf.json
+{
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "Meta-AI-Builder",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": { "all": true },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.metaai.builder",
+      "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icon.icns", "icon.ico"]
+    },
+    "security": { "csp": null },
+    "windows": [{ "title": "Meta-AI Web Builder", "width": 1280, "height": 800 }]
+  }
+}
+EOF
           fi
 
       - name: Build Desktop Binaries
@@ -88,7 +116,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Install Node Dependencies
         run: npm install
