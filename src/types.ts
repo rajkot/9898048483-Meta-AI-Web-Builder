@@ -1,5 +1,17 @@
 export type StageId = 'prompt' | 'strategy' | 'domain' | 'spec' | 'code' | 'drive';
 
+export type TargetStackId = 'react-tailwind' | 'static-web' | 'node-express' | 'flutter-mobile';
+
+export interface TargetStackOption {
+  id: TargetStackId;
+  name: string;
+  description: string;
+  badge: string;
+  iconName: string;
+  defaultTech: string[];
+  sampleFiles: string[];
+}
+
 export interface StrategyOption {
   id: string;
   name: string;
@@ -80,4 +92,22 @@ export interface DriveSyncResult {
   permissionId?: string;
   message?: string;
   logs?: string[];
+}
+
+export interface ProjectDraft {
+  id: string;
+  title: string;
+  projectName?: string;
+  updatedAt: number;
+  currentStage: StageId;
+  userPrompt: string;
+  targetStack: TargetStackOption;
+  completedStages: Record<StageId, boolean>;
+  strategyBreakdown: StrategyBreakdown | null;
+  selectedStrategy: StrategyOption | null;
+  domainQuestions: DomainQuestion[];
+  domainAnswers: DomainAnswers;
+  masterSpec: MasterSpec | null;
+  project: GeneratedProject | null;
+  syncResult: DriveSyncResult | null;
 }
