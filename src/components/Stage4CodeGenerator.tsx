@@ -17,8 +17,17 @@ import {
   Code,
   ExternalLink,
   ClipboardPaste,
+  Monitor,
+  Laptop,
+  Terminal,
+  Smartphone,
+  CheckSquare,
+  Square,
+  Cpu,
+  Box,
 } from 'lucide-react';
 import { generateStage4ChatGPTCodePrompt, extractAndParseJSON } from '../utils/promptGenerators';
+import { injectExecutableConfigs, TargetOSOptions } from '../utils/executableConfigInjector';
 
 interface Stage4CodeGeneratorProps {
   userPrompt: string;
@@ -53,6 +62,12 @@ export const Stage4CodeGenerator: React.FC<Stage4CodeGeneratorProps> = ({
   const [promptCopied, setPromptCopied] = useState<boolean>(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [targetOS, setTargetOS] = useState<TargetOSOptions>({
+    windows: true,
+    macos: true,
+    linux: true,
+    android: true,
+  });
 
   const fallbackMasterSpec: MasterSpec = masterSpec || {
     title: 'Master Specification',
@@ -83,6 +98,26 @@ export const Stage4CodeGenerator: React.FC<Stage4CodeGeneratorProps> = ({
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const handleToggleTargetOS = (key: keyof TargetOSOptions) => {
+    const updatedOS = { ...targetOS, [key]: !targetOS[key] };
+    setTargetOS(updatedOS);
+
+    if (project) {
+      const projectName = project.projectName || 'meta-ai-app';
+      const currentFiles = Object.keys(fileContents).length > 0 ? fileContents : project.files;
+      const reInjected = injectExecutableConfigs(currentFiles, projectName, updatedOS);
+
+      setFileContents(reInjected);
+      const updatedProject: GeneratedProject = {
+        ...project,
+        files: reInjected,
+        fileList: Object.keys(reInjected),
+      };
+      onSetProject(updatedProject);
+      showToast(`Updated native wrapper configs for ${key.toUpperCase()}`);
+    }
   };
 
   const handleCopyPrompt = () => {
@@ -132,18 +167,21 @@ export const Stage4CodeGenerator: React.FC<Stage4CodeGeneratorProps> = ({
         throw new Error('Parsed response missing "files" map.');
       }
 
-      const fileList = Object.keys(parsed.files);
+      const projectName = parsed.projectName || 'meta-ai-generated-app';
+      const enrichedFiles = injectExecutableConfigs(parsed.files, projectName, targetOS);
+      const fileList = Object.keys(enrichedFiles);
+
       const generated: GeneratedProject = {
-        projectName: parsed.projectName || 'meta-ai-generated-app',
+        projectName,
         description: parsed.description || 'Application synthesized by Zero-API Code Generator',
-        files: parsed.files,
+        files: enrichedFiles,
         fileList,
         masterSpec: fallbackMasterSpec,
         strategyName: selectedStrategy.name,
       };
 
       onSetProject(generated);
-      setFileContents(parsed.files);
+      setFileContents(enrichedFiles);
     } catch (err: any) {
       console.error('Parsing error in Stage 4:', err);
       setParseError(err.message || 'Failed to parse JSON codebase. Ensure you copy the complete Web AI JSON output.');
@@ -151,7 +189,7 @@ export const Stage4CodeGenerator: React.FC<Stage4CodeGeneratorProps> = ({
   };
 
   const handleAutoFillDemo = () => {
-    const demoFiles: Record<string, string> = {
+    const rawDemoFiles: Record<string, string> = {
       'package.json': JSON.stringify(
         {
           name: 'meta-ai-web-app',
@@ -249,9 +287,11 @@ Strategy: ${selectedStrategy?.name}
 `,
     };
 
+    const demoFiles = injectExecutableConfigs(rawDemoFiles, 'meta-ai-demo-app', targetOS);
+
     const demoProject: GeneratedProject = {
       projectName: 'meta-ai-demo-app',
-      description: 'Demo synthesized project structure',
+      description: 'Demo synthesized project structure with multi-OS binary build configs',
       files: demoFiles,
       fileList: Object.keys(demoFiles),
       masterSpec: fallbackMasterSpec,
@@ -392,22 +432,190 @@ Strategy: ${selectedStrategy?.name}
             <button
               onClick={handleDownloadZip}
               disabled={isZipping}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-md shadow-indigo-600/20"
             >
-              <Download className="w-3.5 h-3.5 text-indigo-400" />
-              {isZipping ? 'Archiving ZIP...' : 'Download Project ZIP'}
+              <Download className="w-3.5 h-3.5" />
+              {isZipping ? 'Archiving Suite...' : 'Export Cross-Platform Suite (.zip)'}
             </button>
 
             <button
               onClick={onProceedToDriveSync}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-md shadow-indigo-600/20 cursor-pointer"
+              className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer"
             >
-              <HardDrive className="w-3.5 h-3.5" />
+              <HardDrive className="w-3.5 h-3.5 text-indigo-400" />
               Proceed to Stage 5: Google Drive Sync
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
+      </div>
+
+      {/* Multi-OS Target Exporter Panel */}
+      <div className="bg-slate-900/90 border border-indigo-500/40 rounded-2xl p-6 shadow-2xl space-y-5 relative overflow-hidden backdrop-blur-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold rounded-full uppercase tracking-wider flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                Multi-OS Target Exporter & Native Binary Suite
+              </span>
+              <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono rounded-full">
+                Cross-Platform Native Wrappers
+              </span>
+            </div>
+            <h3 className="text-lg font-extrabold text-white">
+              Select Target Operating Systems for Binary Compilation
+            </h3>
+            <p className="text-slate-400 text-xs leading-relaxed max-w-4xl">
+              Toggle target OS platforms below to dynamically inject Rust/Tauri desktop wrappers, Capacitor Android Gradle builds, local <code className="text-indigo-300 font-mono">build-all.sh/.bat</code> scripts, and GitHub CI/CD Actions into your project.
+            </p>
+          </div>
+
+          {project && (
+            <button
+              type="button"
+              onClick={handleDownloadZip}
+              disabled={isZipping}
+              className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-indigo-600/20 cursor-pointer shrink-0"
+            >
+              <Download className="w-4 h-4" />
+              {isZipping ? 'Archiving Suite...' : 'Export Cross-Platform Suite (.zip)'}
+            </button>
+          )}
+        </div>
+
+        {/* Target OS Selection Checklist Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          {/* Windows Target */}
+          <button
+            type="button"
+            onClick={() => handleToggleTargetOS('windows')}
+            className={`p-4 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+              targetOS.windows
+                ? 'bg-indigo-950/60 border-indigo-500/60 text-white shadow-md'
+                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Monitor className={`w-4 h-4 ${targetOS.windows ? 'text-indigo-400' : 'text-slate-500'}`} />
+                <span className="font-bold text-xs">Windows Desktop</span>
+              </div>
+              {targetOS.windows ? <CheckSquare className="w-4 h-4 text-indigo-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-normal">
+              Compiles native <strong className="text-slate-300">.exe</strong> & <strong className="text-slate-300">.msi</strong> installers via Tauri Rust framework.
+            </p>
+            <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <span>Target: x86_64 Win</span>
+              <span className={targetOS.windows ? 'text-indigo-300 font-bold' : ''}>npm run build:win</span>
+            </div>
+          </button>
+
+          {/* macOS Target */}
+          <button
+            type="button"
+            onClick={() => handleToggleTargetOS('macos')}
+            className={`p-4 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+              targetOS.macos
+                ? 'bg-cyan-950/60 border-cyan-500/60 text-white shadow-md'
+                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Laptop className={`w-4 h-4 ${targetOS.macos ? 'text-cyan-400' : 'text-slate-500'}`} />
+                <span className="font-bold text-xs">macOS Desktop</span>
+              </div>
+              {targetOS.macos ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-normal">
+              Compiles Universal Apple Silicon & Intel <strong className="text-slate-300">.dmg</strong> & <strong className="text-slate-300">.app</strong> bundles.
+            </p>
+            <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <span>Target: Universal Mac</span>
+              <span className={targetOS.macos ? 'text-cyan-300 font-bold' : ''}>npm run build:mac</span>
+            </div>
+          </button>
+
+          {/* Linux Target */}
+          <button
+            type="button"
+            onClick={() => handleToggleTargetOS('linux')}
+            className={`p-4 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+              targetOS.linux
+                ? 'bg-amber-950/60 border-amber-500/60 text-white shadow-md'
+                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Terminal className={`w-4 h-4 ${targetOS.linux ? 'text-amber-400' : 'text-slate-500'}`} />
+                <span className="font-bold text-xs">Linux Desktop</span>
+              </div>
+              {targetOS.linux ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-normal">
+              Compiles standalone <strong className="text-slate-300">.AppImage</strong> & Debian <strong className="text-slate-300">.deb</strong> linux packages.
+            </p>
+            <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <span>Target: x86_64 Linux</span>
+              <span className={targetOS.linux ? 'text-amber-300 font-bold' : ''}>npm run build:linux</span>
+            </div>
+          </button>
+
+          {/* Android Mobile Target */}
+          <button
+            type="button"
+            onClick={() => handleToggleTargetOS('android')}
+            className={`p-4 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+              targetOS.android
+                ? 'bg-emerald-950/60 border-emerald-500/60 text-white shadow-md'
+                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Smartphone className={`w-4 h-4 ${targetOS.android ? 'text-emerald-400' : 'text-slate-500'}`} />
+                <span className="font-bold text-xs">Android Mobile</span>
+              </div>
+              {targetOS.android ? <CheckSquare className="w-4 h-4 text-emerald-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-normal">
+              Generates Capacitor Gradle wrappers for <strong className="text-slate-300">.apk</strong> & <strong className="text-slate-300">.aab</strong> mobile builds.
+            </p>
+            <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <span>Target: Android Gradle</span>
+              <span className={targetOS.android ? 'text-emerald-300 font-bold' : ''}>npm run build:android</span>
+            </div>
+          </button>
+        </div>
+
+        {/* Injected File Badges */}
+        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-300">Injected Suite Files:</span>
+            <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] font-mono text-indigo-300">
+              build-all.sh & build-all.bat
+            </span>
+            <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] font-mono text-cyan-300">
+              .github/workflows/build-executables.yml
+            </span>
+            {(targetOS.windows || targetOS.macos || targetOS.linux) && (
+              <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] font-mono text-amber-300">
+                src-tauri/*
+              </span>
+            )}
+            {targetOS.android && (
+              <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] font-mono text-emerald-300">
+                capacitor.config.ts & .json
+              </span>
+            )}
+            <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] font-mono text-slate-300">
+              BUILD_GUIDE.md
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Stage 4 Prompt Bridge Controls */}
