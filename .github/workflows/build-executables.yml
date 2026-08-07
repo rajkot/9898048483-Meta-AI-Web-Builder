@@ -87,7 +87,7 @@ EOF
             cat << 'EOF' > src-tauri/tauri.conf.json
 {
   "build": {
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "",
     "beforeDevCommand": "npm run dev",
     "devPath": "http://localhost:1420",
     "distDir": "../dist"
@@ -110,20 +110,16 @@ EOF
 }
 EOF
 
-            python3 -c "
-import base64, os
-os.makedirs('src-tauri/icons', exist_ok=True)
-png_b64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAFUlEQVRYR2Nk+M9Qz0AEYB3VAB8GAI+9AYE1XpA4AAAAAElFTkSuQmCC'
-png_data = base64.b64decode(png_b64)
-for name in ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns']:
-    path = os.path.join('src-tauri/icons', name)
-    if not os.path.exists(path):
-        with open(path, 'wb') as f:
-            f.write(png_data)
-" || {
-              echo "Creating fallback icon files..."
-              touch src-tauri/icons/32x32.png src-tauri/icons/128x128.png src-tauri/icons/128x128@2x.png src-tauri/icons/icon.ico src-tauri/icons/icon.icns
-            }
+            node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const dir = 'src-tauri/icons';
+            fs.mkdirSync(dir, { recursive: true });
+            const pngBuf = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+            ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns'].forEach(f => {
+              fs.writeFileSync(path.join(dir, f), pngBuf);
+            });
+            "
           fi
 
       - name: Build Desktop Binaries
@@ -136,7 +132,8 @@ for name in ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icn
           releaseBody: 'Automated desktop build executable'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.platform == 'ubuntu-latest' && '--target x86_64-unknown-linux-gnu' || '' }}
+          includeTauri: true
+          args: ${{ matrix.os == 'ubuntu-latest' && '--target x86_64-unknown-linux-gnu' || '' }}
 
       - name: Upload Desktop Artifacts
         uses: actions/upload-artifact@v4
