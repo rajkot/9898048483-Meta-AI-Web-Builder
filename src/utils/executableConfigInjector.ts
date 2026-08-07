@@ -287,8 +287,7 @@ ${matrixIncludes.join('\n')}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Install Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -300,7 +299,7 @@ ${matrixIncludes.join('\n')}
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Node Dependencies
-        run: npm ci || npm install
+        run: npm install
 
       - name: Build Desktop Application Binary
         run: \${{ matrix.cmd }}
@@ -323,7 +322,7 @@ ${matrixIncludes.join('\n')}
         uses: actions/checkout@v4
 
       - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -331,11 +330,10 @@ ${matrixIncludes.join('\n')}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Install Node Dependencies
-        run: npm ci || npm install
+        run: npm install
 
       - name: Build Web Assets
         run: npm run build
