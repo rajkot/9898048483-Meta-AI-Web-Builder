@@ -35,7 +35,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf build-essential curl wget file libssl-dev
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -46,12 +46,44 @@ jobs:
       - name: Build Web Application
         run: npm run build
 
-      - name: Auto-Initialize Tauri Configs if Missing
+      - name: Auto-Scaffold Missing Tauri Assets
         shell: bash
         run: |
-          if [ ! -f "src-tauri/tauri.conf.json" ]; then
-            echo "src-tauri/tauri.conf.json missing, initializing default configuration..."
-            mkdir -p src-tauri
+          if [ ! -f "src-tauri/Cargo.toml" ] || [ ! -f "src-tauri/src/main.rs" ] || [ ! -f "src-tauri/tauri.conf.json" ]; then
+            echo "src-tauri structure incomplete or missing, auto-scaffolding Tauri assets..."
+            mkdir -p src-tauri/src src-tauri/icons
+
+            cat << 'EOF' > src-tauri/Cargo.toml
+[package]
+name = "meta-ai-builder"
+version = "1.0.0"
+description = "Meta-AI Web Builder Application"
+authors = ["Meta-AI Builder"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.6", features = ["shell-open"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+EOF
+
+            cat << 'EOF' > src-tauri/src/main.rs
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+  tauri::Builder::default()
+    .run(tauri::generate_context!())
+    .expect("error while running tauri application");
+}
+EOF
+
             cat << 'EOF' > src-tauri/tauri.conf.json
 {
   "build": {
@@ -77,6 +109,21 @@ jobs:
   }
 }
 EOF
+
+            python3 -c "
+import base64, os
+os.makedirs('src-tauri/icons', exist_ok=True)
+png_b64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAFUlEQVRYR2Nk+M9Qz0AEYB3VAB8GAI+9AYE1XpA4AAAAAElFTkSuQmCC'
+png_data = base64.b64decode(png_b64)
+for name in ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns']:
+    path = os.path.join('src-tauri/icons', name)
+    if not os.path.exists(path):
+        with open(path, 'wb') as f:
+            f.write(png_data)
+" || {
+              echo "Creating fallback icon files..."
+              touch src-tauri/icons/32x32.png src-tauri/icons/128x128.png src-tauri/icons/128x128@2x.png src-tauri/icons/icon.ico src-tauri/icons/icon.icns
+            }
           fi
 
       - name: Build Desktop Binaries
@@ -95,6 +142,7 @@ EOF
         uses: actions/upload-artifact@v4
         with:
           name: meta-ai-builder-${{ matrix.platform }}-binary
+          if-no-files-found: warn
           path: |
             src-tauri/target/release/bundle/**/*
             dist/
@@ -139,6 +187,7 @@ EOF
         uses: actions/upload-artifact@v4
         with:
           name: meta-ai-builder-android-apk
+          if-no-files-found: warn
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
             dist/
